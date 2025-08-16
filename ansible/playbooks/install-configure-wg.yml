@@ -1,0 +1,67 @@
+---
+- name: Configure WireGuard full mesh
+  hosts: wireguard_hosts
+  become: yes
+  vars:
+    wg_listen_port: 51820
+    wg_interface_name: wg99
+
+  tasks:
+    - name: Ensure WireGuard is installed
+      ansible.builtin.apt:
+        name: wireguard
+        state: present
+
+    - name: Ensure keys directory exists
+      ansible.builtin.file:
+        path: /etc/wireguard/keys
+        state: directory
+        mode: '0700'
+
+    - name: Generate private key
+      ansible.builtin.command: wg genkey
+      args:
+        creates: /etc/wireguard/keys/privatekey
+      register: private_key_result
+
+    - name: Generate public key from private key
+      ansible.builtin.command: wg pubkey
+      args:
+        stdin: "{{ private_key_result.stdout }}"
+      register: public_key_result
+
+    - name: Save private key to file
+      ansible.builtin.copy:
+        content: "{{ private_key_result.stdout }}"
+        dest: /etc/wireguard/keys/privatekey
+        mode: '0600'
+
+    - name: Save public key to file
+      ansible.builtin.copy:
+        content: "{{ public_key_result.stdout }}"
+        dest: /etc/wireguard/keys/publickey
+        mode: '0644'
+
+    - name: Gather facts from all hosts to use their keys
+      ansible.builtin.setup:
+      delegate_to: localhost
+      run_once: true
+
+    - name: Create WireGuard configuration file from template
+      ansible.builtin.template:
+        src: wg99.conf.j2
+        dest: "/etc/wireguard/{{ wg_interface_name }}.conf"
+        mode: '0644'
+      notify: Restart WireGuard
+
+    - name: Enable and start WireGuard service
+      ansible.builtin.systemd:
+        name: "wg-quick@{{ wg_interface_name }}"
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Restart WireGuard
+      ansible.builtin.systemd:
+        name: "wg-quick@{{ wg_interface_name }}"
+        state: restarted
