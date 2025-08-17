@@ -1,2 +1,4 @@
 /terraform/
 /old_source/
+/ansible/files/hosts.ini
+/ansible/inventory/inventory
