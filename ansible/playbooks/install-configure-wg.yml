@@ -1,7 +1,7 @@
 ---
 - name: Configure WireGuard full mesh
-  hosts: wireguard_hosts
-  become: yes
+  hosts: wg_bgp_group
+  become: true
   vars:
     wg_listen_port: 51820
     wg_interface_name: wg99
@@ -18,38 +18,51 @@
         state: directory
         mode: '0700'
 
-    - name: Generate private key
+    - name: Check if private key exists
+      ansible.builtin.stat:
+        path: "/etc/wireguard/keys/privatekey"
+      register: private_key_stat
+
+    - name: Generate new private key if not exists
       ansible.builtin.command: wg genkey
-      args:
-        creates: /etc/wireguard/keys/privatekey
-      register: private_key_result
+      when: not private_key_stat.stat.exists
+      register: new_private_key
+
+    - name: Get private key content if it already exists
+      ansible.builtin.slurp:
+        src: "/etc/wireguard/keys/privatekey"
+      when: private_key_stat.stat.exists
+      register: existing_private_key_content
+
+    - name: Set private key fact for later use
+      ansible.builtin.set_fact:
+        private_key: "{{ new_private_key.stdout | default(existing_private_key_content.content | b64decode) | trim }}"
 
     - name: Generate public key from private key
       ansible.builtin.command: wg pubkey
       args:
-        stdin: "{{ private_key_result.stdout }}"
+        stdin: "{{ private_key }}"
       register: public_key_result
 
     - name: Save private key to file
       ansible.builtin.copy:
-        content: "{{ private_key_result.stdout }}"
-        dest: /etc/wireguard/keys/privatekey
+        content: "{{ private_key }}"
+        dest: "/etc/wireguard/keys/privatekey"
         mode: '0600'
 
-    - name: Save public key to file
-      ansible.builtin.copy:
-        content: "{{ public_key_result.stdout }}"
-        dest: /etc/wireguard/keys/publickey
-        mode: '0644'
-
-    - name: Gather facts from all hosts to use their keys
-      ansible.builtin.setup:
-      delegate_to: localhost
+    - name: Set host public key as a fact
+      ansible.builtin.set_fact:
+        host_public_key: "{{ public_key_result.stdout | trim }}"
+      
+    - name: Gather all public keys from all hosts in the group
+      ansible.builtin.set_fact:
+        all_public_keys: "{{ groups['wg_bgp_group'] | map('extract', hostvars, 'host_public_key') | list }}"
       run_once: true
+      delegate_to: localhost
 
     - name: Create WireGuard configuration file from template
       ansible.builtin.template:
-        src: wg99.conf.j2
+        src: templates/wg99.conf.j2
         dest: "/etc/wireguard/{{ wg_interface_name }}.conf"
         mode: '0644'
       notify: Restart WireGuard
@@ -58,7 +71,7 @@
       ansible.builtin.systemd:
         name: "wg-quick@{{ wg_interface_name }}"
         state: started
-        enabled: yes
+        enabled: true
 
   handlers:
     - name: Restart WireGuard
