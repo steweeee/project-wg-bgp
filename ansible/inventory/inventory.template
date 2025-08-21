@@ -1,0 +1,33 @@
+---
+all:
+  children:
+    wg_bgp_group:
+      hosts:
+        wg_bgp_1:
+          ansible_host: 
+          ansible_user: 
+          ansible_ssh_private_key_file: 
+          wg_ip_address: 
+          my_as: 
+          networks_to_announce:
+        wg_bgp_2:
+          ansible_host:
+          ansible_user: 
+          ansible_ssh_private_key_file: 
+          wg_ip_address: 
+          my_as: 
+          networks_to_announce:
+        wg_bgp_3:
+          ansible_host: 
+          ansible_user: 
+          ansible_ssh_private_key_file: 
+          wg_ip_address: 
+          my_as:
+          networks_to_announce:
+        wg_bgp_4:
+          ansible_host: 
+          ansible_user: 
+          ansible_ssh_private_key_file: 
+          wg_ip_address: 
+          my_as: 
+          networks_to_announce:

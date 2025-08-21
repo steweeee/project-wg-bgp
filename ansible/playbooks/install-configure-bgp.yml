@@ -1,0 +1,41 @@
+---
+- name: Развертывание и настройка BGP (FRR)
+  hosts: wg_bgp_group
+  become: true
+  tasks:
+    - name: Установка пакета FRR
+      ansible.builtin.apt:
+        name: frr
+        state: present
+        update_cache: yes
+
+    - name: Создание файла /etc/frr/daemons
+      ansible.builtin.file:
+        path: /etc/frr/daemons
+        state: touch
+        owner: frr
+        group: frr
+        mode: '0644'
+      # Этот шаг нужен только один раз. Если файл уже существует, Ansible просто пропустит его.
+
+    - name: Включение демона BGP в файле daemons
+      ansible.builtin.lineinfile:
+        path: /etc/frr/daemons
+        regexp: '^bgpd='
+        line: 'bgpd=yes'
+      notify: restart frr
+
+    - name: Создание конфигурации FRR из шаблона
+      ansible.builtin.template:
+        src: templates/frr.conf.j2
+        dest: /etc/frr/frr.conf
+        owner: frr
+        group: frr
+        mode: '0640'
+      notify: restart frr
+
+  handlers:
+    - name: restart frr
+      ansible.builtin.service:
+        name: frr
+        state: restarted

@@ -1,25 +1,17 @@
-hostname server-a
-password frr_password
-service integrated-vtysh-config
-
-router bgp 65001
-  bgp router-id 10.0.0.1
-  network 10.10.0.0/24 # Ваша сеть, которую вы хотите анонсировать
-  neighbor 10.0.0.2 remote-as 65002
-  neighbor 10.0.0.3 remote-as 65003
-  neighbor 10.0.0.4 remote-as 65004
-
-
-hostname {{ ansible_hostname }}
+! FRR configuration file
+!
+hostname {{ inventory_hostname }}
 log file /var/log/frr/frr.log
 service integrated-vtysh-config
 
 router bgp {{ my_as }}
-  bgp router-id {{ ansible_host }}
-{% for peer in peers %}
-  neighbor {{ peer.ip }} remote-as {{ peer.as }}
+  bgp router-id {{ wg_ip_address }}
+{% for peer in groups['wg_bgp_group'] %}
+  {% if peer != inventory_hostname %}
+  neighbor {{ hostvars[peer]['wg_ip_address'] }} remote-as {{ hostvars[peer]['my_as'] }}
+  {% endif %}
 {% endfor %}
   address-family ipv4 unicast
-{% for network in networks %}
+{% for network in networks_to_announce %}
     network {{ network }}
 {% endfor %}
